@@ -31,6 +31,30 @@ def calculate_hash(filepath):
             hasher.update(chunk)
     return hasher.hexdigest()
 
+import subprocess
+import platform
+
+def lock_file(file_path):
+    if platform.system() == "Windows":
+        lock_file_windows(file_path)
+    else:
+        lock_file_linux(file_path)
+
+def lock_file_windows(file_path):
+    try:
+        subprocess.run(["icacls", file_path, "/inheritance:r"], check=True)
+        subprocess.run(["icacls", file_path, "/deny", "Everyone:(F)"], check=True)
+        print(f"🔒 Locked down: {file_path}")
+    except Exception as e:
+        print(f"⚠️ Error locking file {file_path}: {e}")
+
+def lock_file_linux(file_path):
+    try:
+        subprocess.run(["chmod", "000", file_path], check=True)
+        print(f"🔒 Locked down: {file_path}")
+    except Exception as e:
+        print(f"⚠️ Error locking file {file_path}: {e}")
+
 class FileChangeHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
@@ -49,6 +73,7 @@ class FileChangeHandler(FileSystemEventHandler):
                 print(format_event("MODIFIED", event.src_path, "NEW", "🆕", "Not in baseline"))
             elif new_hash != old_hash:
                 print(format_event("MODIFIED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
+                lock_file(event.src_path)
             else:
                 print(format_event("MODIFIED", event.src_path, "OK", "✅", "Hash unchanged"))
 
@@ -61,6 +86,7 @@ class FileChangeHandler(FileSystemEventHandler):
                 print(format_event("CREATED", event.src_path, "NEW", "🆕", "Not in baseline"))
             elif new_hash != old_hash:
                 print(format_event("CREATED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
+                lock_file(event.src_path)
             else:
                 print(format_event("CREATED", event.src_path, "OK", "✅", "Hash matches baseline"))
 
