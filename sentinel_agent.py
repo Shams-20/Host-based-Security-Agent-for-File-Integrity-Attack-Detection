@@ -3,11 +3,17 @@ import os
 import hashlib
 import json
 import sys
-
+from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+event_cooldown = {}
+COOLDOWN_SECONDS = 2
 baseline_file = "hashes.json"
+
+def format_event(event_type, filepath, status, emoji, msg):
+    name = Path(filepath).name
+    return f"[ {event_type:^9} ] {name:<25} → {status:<7} {emoji} {msg}"
 
 # Load baseline hashes
 try:
@@ -26,47 +32,47 @@ def calculate_hash(filepath):
     return hasher.hexdigest()
 
 class FileChangeHandler(FileSystemEventHandler):
+
     def on_modified(self, event):
-        print(f"[MODIFIED] {event.src_path}")
+        now = time.time()
+        last_event_time = event_cooldown.get(event.src_path, 0)
+        if now - last_event_time < COOLDOWN_SECONDS:
+            return
+
+        event_cooldown[event.src_path] = now
+
         if os.path.isfile(event.src_path):
-            try:
-                new_hash = calculate_hash(event.src_path)
-                old_hash = baseline_hashes.get(event.src_path)
-                
-                if old_hash is None:
-                    print(f"🆕 [WARNING] New file not in baseline: {event.src_path}")
-                elif new_hash != old_hash:
-                    print(f"⚠️ [ALERT] Hash mismatch detected! Possible tampering: {event.src_path}")
-                else:
-                    print(f"✅ [OK] File modified but hash is unchanged: {event.src_path}")
-            except Exception as e:
-                print(f"❌ Error hashing file: {event.src_path} — {e}")
+            new_hash = calculate_hash(event.src_path)
+            old_hash = baseline_hashes.get(event.src_path)
+
+            if old_hash is None:
+                print(format_event("MODIFIED", event.src_path, "NEW", "🆕", "Not in baseline"))
+            elif new_hash != old_hash:
+                print(format_event("MODIFIED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
+            else:
+                print(format_event("MODIFIED", event.src_path, "OK", "✅", "Hash unchanged"))
 
     def on_created(self, event):
-        print(f"[CREATED] {event.src_path}")
         if os.path.isfile(event.src_path):
-            try:
-                new_hash = calculate_hash(event.src_path)
-                old_hash = baseline_hashes.get(event.src_path)
-                
-                if old_hash is None:
-                    print(f"🆕 [WARNING] New file not in baseline: {event.src_path}")
-                elif new_hash != old_hash:
-                    print(f"⚠️ [ALERT] Hash mismatch detected! Possible tampering: {event.src_path}")
-                else:
-                    print(f"✅ [OK] File created and hash matches baseline: {event.src_path}")
-            except Exception as e:
-                print(f"❌ Error hashing file: {event.src_path} — {e}")
+            new_hash = calculate_hash(event.src_path)
+            old_hash = baseline_hashes.get(event.src_path)
+
+            if old_hash is None:
+                print(format_event("CREATED", event.src_path, "NEW", "🆕", "Not in baseline"))
+            elif new_hash != old_hash:
+                print(format_event("CREATED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
+            else:
+                print(format_event("CREATED", event.src_path, "OK", "✅", "Hash matches baseline"))
 
     def on_deleted(self, event):
-        print(f"[DELETED] {event.src_path}")
+        print(format_event("DELETED", event.src_path, "REMOVED", "🗑️", "File deleted"))
 
 if __name__ == "__main__":
     path = input("Enter directory to monitor: ")
     event_handler = FileChangeHandler()
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
-    
+
     print(f"🚨 Monitoring changes in: {path}")
     observer.start()
 
@@ -76,5 +82,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         observer.stop()
         print("🛑 Monitoring stopped.")
-    
+
     observer.join()
