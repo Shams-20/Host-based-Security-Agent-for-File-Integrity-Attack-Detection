@@ -43,7 +43,6 @@ def compare_hashes(old_hashes, new_hashes):
     return changes_found
 
 
-# Main script logic
 if __name__ == "__main__":
     directory = input("Enter the directory to scan: ")
     baseline_file = "hashes.json"
@@ -56,28 +55,29 @@ if __name__ == "__main__":
     if not os.path.exists(baseline_file):
         print("No baseline found. Creating baseline...")
         files = get_all_files(directory)
-
         hashes = {f: calculate_hash(f) for f in files}
         save_hashes(hashes, baseline_file)
         print("Baseline saved.")
+    
     else:
         print("Baseline found. Checking for changes...")
         old_hashes = load_hashes(baseline_file)
         files = get_all_files(directory)
         new_hashes = {f: calculate_hash(f) for f in files}
+        
         has_changes = compare_hashes(old_hashes, new_hashes)
 
-    if not has_changes:
-        print("No changes detected. Baseline is up-to-date.")
-    else:    
-        if auto_update:
-            print("Auto-update mode: updating baseline automatically.")
-            save_hashes(new_hashes, baseline_file)
-            print("Baseline updated.")
-        else:
-            choice = input("Do you want to update the baseline with current state? (y/n): ").lower()
-            if choice == "y":
+        if not has_changes:
+            print("No changes detected. Baseline is up-to-date.")
+        else:    
+            if auto_update:
+                print("Auto-update mode: updating baseline automatically.")
                 save_hashes(new_hashes, baseline_file)
                 print("Baseline updated.")
             else:
-                print("Baseline NOT updated. Keeping original.")
+                choice = input("Do you want to update the baseline with current state? (y/n): ").lower()
+                if choice == "y":
+                    save_hashes(new_hashes, baseline_file)
+                    print("Baseline updated.")
+                else:
+                    print("Baseline NOT updated. Keeping original.")
