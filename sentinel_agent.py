@@ -3,6 +3,9 @@ import os
 import hashlib
 import json
 import sys
+import subprocess
+import platform
+
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -30,9 +33,6 @@ def calculate_hash(filepath):
         for chunk in iter(lambda: f.read(4096), b''):
             hasher.update(chunk)
     return hasher.hexdigest()
-
-import subprocess
-import platform
 
 def lock_file(file_path):
     if platform.system() == "Windows":
