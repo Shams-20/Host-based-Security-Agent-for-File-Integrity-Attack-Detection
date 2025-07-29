@@ -7,22 +7,18 @@ import subprocess
 import platform
 import yara
 
-from yara_scanner import compile_rules, scan_file_with_yara
-
-from event_logger import log_event
-
-
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-event_cooldown = {}
-COOLDOWN_SECONDS = 2
-baseline_file = "hashes.json"
+# Custom modules (assuming these exist)
+from yara_scanner import compile_rules, scan_file_with_yara
+from event_logger import log_event
 
-def format_event(event_type, filepath, status, emoji, msg):
-    name = Path(filepath).name
-    return f"[ {event_type:^9} ] {name:<25} → {status:<7} {emoji} {msg}"
+# Constants
+COOLDOWN_SECONDS = 2
+event_cooldown = {}
+baseline_file = "hashes.json"
 
 # Load baseline hashes
 try:
@@ -33,18 +29,30 @@ except FileNotFoundError:
     print("❌ Baseline file not found. Run baseline_checker.py first.")
     sys.exit(1)
 
+
+def format_event(event_type, filepath, status, emoji, msg):
+    name = Path(filepath).name
+    return f"[ {event_type:^9} ] {name:<25} → {status:<7} {emoji} {msg}"
+
+
 def calculate_hash(filepath):
     hasher = hashlib.sha256()
-    with open(filepath, 'rb') as f:
-        for chunk in iter(lambda: f.read(4096), b''):
-            hasher.update(chunk)
+    try:
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                hasher.update(chunk)
+    except PermissionError:
+        print(f"❌ Permission denied while hashing: {filepath}")
+        return None
     return hasher.hexdigest()
+
 
 def lock_file(file_path):
     if platform.system() == "Windows":
         lock_file_windows(file_path)
     else:
         lock_file_linux(file_path)
+
 
 def lock_file_windows(file_path):
     try:
@@ -54,12 +62,51 @@ def lock_file_windows(file_path):
     except Exception as e:
         print(f"⚠️ Error locking file {file_path}: {e}")
 
+
 def lock_file_linux(file_path):
+    if not os.path.exists(file_path):
+        print(f"⚠️ File vanished before it could be locked: {file_path}")
+        return
     try:
         subprocess.run(["chmod", "000", file_path], check=True)
         print(f"🔒 Locked down: {file_path}")
     except Exception as e:
         print(f"⚠️ Error locking file {file_path}: {e}")
+
+
+def process_file_event(file_path, event_type, yara_rules, baseline_hashes):
+    if not os.path.isfile(file_path):
+        return
+
+    try:
+        new_hash = calculate_hash(file_path)
+        if new_hash is None:
+            return
+
+        if yara_rules:
+            matches = scan_file_with_yara(file_path, yara_rules)
+            if matches:
+                print(f"⚠️ YARA Match in {file_path} → Rule(s): {[m.rule for m in matches]}")
+                log_event("YARA", file_path, "ALERT", f"Matched rules: {[m.rule for m in matches]}")
+                lock_file(file_path)
+
+        old_hash = baseline_hashes.get(file_path)
+
+        if old_hash is None:
+            print(format_event(event_type, file_path, "NEW", "🆕", "Not in baseline"))
+            log_event(event_type, file_path, "NEW", "Not in baseline")
+        elif new_hash != old_hash:
+            print(format_event(event_type, file_path, "ALERT", "⚠️", "Hash mismatch"))
+            log_event(event_type, file_path, "ALERT", "Hash mismatch")
+            lock_file(file_path)
+        else:
+            print(format_event(event_type, file_path, "OK", "✅", "Hash unchanged"))
+            log_event(event_type, file_path, "OK", "Hash unchanged")
+
+    except PermissionError:
+        print(format_event(event_type, file_path, "SKIPPED", "🔒", "Permission denied"))
+        log_event(event_type, file_path, "SKIPPED", "Permission denied")
+
 
 class FileChangeHandler(FileSystemEventHandler):
     def __init__(self, yara_rules):
@@ -70,62 +117,34 @@ class FileChangeHandler(FileSystemEventHandler):
         last_event_time = event_cooldown.get(event.src_path, 0)
         if now - last_event_time < COOLDOWN_SECONDS:
             return
-
         event_cooldown[event.src_path] = now
 
-        if os.path.isfile(event.src_path):
-            new_hash = calculate_hash(event.src_path)
+        # Handle GNOME weird temp file shenanigans
+        if os.path.basename(event.src_path).startswith('.goutputstream'):
+            time.sleep(0.5)
+            parent_dir = os.path.dirname(event.src_path)
+            for f in os.listdir(parent_dir):
+                full_path = os.path.join(parent_dir, f)
+                if not f.startswith('.goutputstream') and os.path.isfile(full_path):
+                    if abs(os.path.getmtime(full_path) - time.time()) < 2:
+                        process_file_event(full_path, "MODIFIED", self.yara_rules, baseline_hashes)
+            return
 
-            if self.yara_rules:
-                    matches = scan_file_with_yara(event.src_path, self.yara_rules)
-                    if matches:
-                        print(f"⚠️ YARA Match in {event.src_path} → Rule(s): {[m.rule for m in matches]}")
-                        log_event("YARA", event.src_path, "ALERT", f"Matched rules: {[m.rule for m in matches]}")
-                        lock_file(event.src_path)
-
-            old_hash = baseline_hashes.get(event.src_path)
-
-            if old_hash is None:
-                print(format_event("MODIFIED", event.src_path, "NEW", "🆕", "Not in baseline"))
-                log_event("MODIFIED", event.src_path, "NEW", "Not in baseline")
-            elif new_hash != old_hash:
-                print(format_event("MODIFIED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
-                log_event("MODIFIED", event.src_path, "ALERT", "Hash mismatch")
-                lock_file(event.src_path)
-            else:
-                print(format_event("MODIFIED", event.src_path, "OK", "✅", "Hash unchanged"))
-                log_event("MODIFIED", event.src_path, "OK", "Hash unchanged")
+        process_file_event(event.src_path, "MODIFIED", self.yara_rules, baseline_hashes)
 
     def on_created(self, event):
-        if os.path.isfile(event.src_path):
-            try:
-                new_hash = calculate_hash(event.src_path)
+        # Handle GNOME file save behavior
+        if os.path.basename(event.src_path).startswith('.goutputstream'):
+            time.sleep(0.5)
+            parent_dir = os.path.dirname(event.src_path)
+            for f in os.listdir(parent_dir):
+                full_path = os.path.join(parent_dir, f)
+                if not f.startswith('.goutputstream') and os.path.isfile(full_path):
+                    if abs(os.path.getmtime(full_path) - time.time()) < 2:
+                        process_file_event(full_path, "MODIFIED", self.yara_rules, baseline_hashes)
+            return
 
-                if self.yara_rules:
-                    matches = scan_file_with_yara(event.src_path, self.yara_rules)
-                    if matches:
-                        print(f"⚠️ YARA Match in {event.src_path} → Rule(s): {[m.rule for m in matches]}")
-                        log_event("YARA", event.src_path, "ALERT", f"Matched rules: {[m.rule for m in matches]}")
-                        lock_file(event.src_path)
-
-            except PermissionError:
-                print(format_event("CREATED", event.src_path, "SKIPPED", "🔒", "Permission denied"))
-                log_event("CREATED", event.src_path, "SKIPPED", "Permission denied")
-                lock_file(event.src_path)
-                return
-
-            old_hash = baseline_hashes.get(event.src_path)
-
-            if old_hash is None:
-                print(format_event("CREATED", event.src_path, "NEW", "🆕", "Not in baseline"))
-                log_event("CREATED", event.src_path, "NEW", "Not in baseline")
-            elif new_hash != old_hash:
-                print(format_event("CREATED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
-                log_event("CREATED", event.src_path, "ALERT", "Hash mismatch")
-                lock_file(event.src_path)
-            else:
-                print(format_event("CREATED", event.src_path, "OK", "✅", "Hash matches baseline"))
-                log_event("CREATED", event.src_path, "OK", "Hash matches baseline")
+        process_file_event(event.src_path, "CREATED", self.yara_rules, baseline_hashes)
 
     def on_deleted(self, event):
         print(format_event("DELETED", event.src_path, "REMOVED", "🗑️", "File deleted"))
@@ -133,14 +152,18 @@ class FileChangeHandler(FileSystemEventHandler):
 
 
 if __name__ == "__main__":
-    path = input("Enter directory to monitor: ")
+    path = input("Enter directory to monitor: ").strip()
 
-    rules_dir = "yara_rules"
-    yara_rules = compile_rules(rules_dir)
-    if yara_rules:
+    if not os.path.isdir(path):
+        print("❌ Provided path is not a valid directory.")
+        sys.exit(1)
+
+    try:
+        yara_rules = compile_rules("yara_rules")
         print("✅ YARA rules loaded.")
-    else:
-        print("⚠️ No YARA rules found.")
+    except Exception as e:
+        print(f"🛑 Failed to load YARA rules: {e}")
+        sys.exit(1)
 
     event_handler = FileChangeHandler(yara_rules)
     observer = Observer()
@@ -157,3 +180,4 @@ if __name__ == "__main__":
         print("🛑 Monitoring stopped.")
 
     observer.join()
+
