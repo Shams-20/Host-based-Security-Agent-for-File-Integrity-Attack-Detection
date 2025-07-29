@@ -85,7 +85,14 @@ class FileChangeHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         if os.path.isfile(event.src_path):
-            new_hash = calculate_hash(event.src_path)
+            try:
+                new_hash = calculate_hash(event.src_path)
+            except PermissionError:
+                print(format_event("CREATED", event.src_path, "SKIPPED", "🔒", "Permission denied"))
+                log_event("CREATED", event.src_path, "SKIPPED", "Permission denied")
+                lock_file(event.src_path)
+                return
+
             old_hash = baseline_hashes.get(event.src_path)
 
             if old_hash is None:
@@ -102,6 +109,7 @@ class FileChangeHandler(FileSystemEventHandler):
     def on_deleted(self, event):
         print(format_event("DELETED", event.src_path, "REMOVED", "🗑️", "File deleted"))
         log_event("DELETED", event.src_path, "REMOVED", "File deleted")
+
 
 if __name__ == "__main__":
     path = input("Enter directory to monitor: ")
