@@ -1,0 +1,2 @@
+{"timestamp": "2025-07-29T13:30:05.706344", "event_type": "YARA", "file_path": "/home/kali/Desktop/test/.goutputstream-1F5892", "status": "ALERT", "message": "Matched rules: ['Detect_Evil_Strings']"}
+{"timestamp": "2025-07-29T13:30:05.711252", "event_type": "CREATED", "file_path": "/home/kali/Desktop/test/.goutputstream-1F5892", "status": "NEW", "message": "Not in baseline"}

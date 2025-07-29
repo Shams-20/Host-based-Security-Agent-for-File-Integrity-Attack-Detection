@@ -5,6 +5,9 @@ import json
 import sys
 import subprocess
 import platform
+import yara
+
+from yara_scanner import compile_rules, scan_file_with_yara
 
 from event_logger import log_event
 
@@ -59,6 +62,8 @@ def lock_file_linux(file_path):
         print(f"⚠️ Error locking file {file_path}: {e}")
 
 class FileChangeHandler(FileSystemEventHandler):
+    def __init__(self, yara_rules):
+        self.yara_rules = yara_rules
 
     def on_modified(self, event):
         now = time.time()
@@ -70,6 +75,14 @@ class FileChangeHandler(FileSystemEventHandler):
 
         if os.path.isfile(event.src_path):
             new_hash = calculate_hash(event.src_path)
+
+            if self.yara_rules:
+                    matches = scan_file_with_yara(event.src_path, self.yara_rules)
+                    if matches:
+                        print(f"⚠️ YARA Match in {event.src_path} → Rule(s): {[m.rule for m in matches]}")
+                        log_event("YARA", event.src_path, "ALERT", f"Matched rules: {[m.rule for m in matches]}")
+                        lock_file(event.src_path)
+
             old_hash = baseline_hashes.get(event.src_path)
 
             if old_hash is None:
@@ -87,6 +100,14 @@ class FileChangeHandler(FileSystemEventHandler):
         if os.path.isfile(event.src_path):
             try:
                 new_hash = calculate_hash(event.src_path)
+
+                if self.yara_rules:
+                    matches = scan_file_with_yara(event.src_path, self.yara_rules)
+                    if matches:
+                        print(f"⚠️ YARA Match in {event.src_path} → Rule(s): {[m.rule for m in matches]}")
+                        log_event("YARA", event.src_path, "ALERT", f"Matched rules: {[m.rule for m in matches]}")
+                        lock_file(event.src_path)
+
             except PermissionError:
                 print(format_event("CREATED", event.src_path, "SKIPPED", "🔒", "Permission denied"))
                 log_event("CREATED", event.src_path, "SKIPPED", "Permission denied")
@@ -113,7 +134,15 @@ class FileChangeHandler(FileSystemEventHandler):
 
 if __name__ == "__main__":
     path = input("Enter directory to monitor: ")
-    event_handler = FileChangeHandler()
+
+    rules_dir = "yara_rules"
+    yara_rules = compile_rules(rules_dir)
+    if yara_rules:
+        print("✅ YARA rules loaded.")
+    else:
+        print("⚠️ No YARA rules found.")
+
+    event_handler = FileChangeHandler(yara_rules)
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
 
