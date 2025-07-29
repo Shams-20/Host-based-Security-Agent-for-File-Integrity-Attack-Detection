@@ -5,6 +5,7 @@ import json
 import sys
 import subprocess
 import platform
+import shutil  
 
 from event_logger import log_event
 
@@ -16,6 +17,7 @@ from watchdog.events import FileSystemEventHandler
 event_cooldown = {}
 COOLDOWN_SECONDS = 2
 baseline_file = "hashes.json"
+BACKUP_DIR = ".vault"# Ensure the backup directory exists
 
 def format_event(event_type, filepath, status, emoji, msg):
     name = Path(filepath).name
@@ -58,6 +60,30 @@ def lock_file_linux(file_path):
     except Exception as e:
         print(f"⚠️ Error locking file {file_path}: {e}")
 
+def backup_file(filepath, monitored_dir):
+    try:
+        rel_path = os.path.relpath(filepath, monitored_dir)
+        backup_path = os.path.join(BACKUP_DIR, rel_path)
+        os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+        shutil.copy2(filepath, backup_path)
+        print(f"💾 Backed up: {filepath}")
+    except Exception as e:
+        print(f"⚠️ Failed to backup {filepath}: {e}")
+
+def restore_file(filepath, monitored_dir):
+    rel_path = os.path.relpath(filepath, monitored_dir)
+    backup_path = os.path.join(BACKUP_DIR, rel_path)
+    try:
+        if os.path.exists(backup_path):
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            shutil.copy2(backup_path, filepath)
+            print(f"♻️ Restored: {filepath}")
+            log_event("RESTORE", filepath, "SUCCESS", "Recovered from backup")
+        else:
+            print(f"❌ No backup for {filepath}")
+    except Exception as e:
+        print(f"🚫 Failed to restore {filepath}: {e}")
+
 class FileChangeHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
@@ -78,6 +104,7 @@ class FileChangeHandler(FileSystemEventHandler):
             elif new_hash != old_hash:
                 print(format_event("MODIFIED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
                 log_event("MODIFIED", event.src_path, "ALERT", "Hash mismatch")
+                backup_file(event.src_path, path)
                 lock_file(event.src_path)
             else:
                 print(format_event("MODIFIED", event.src_path, "OK", "✅", "Hash unchanged"))
@@ -90,6 +117,7 @@ class FileChangeHandler(FileSystemEventHandler):
             except PermissionError:
                 print(format_event("CREATED", event.src_path, "SKIPPED", "🔒", "Permission denied"))
                 log_event("CREATED", event.src_path, "SKIPPED", "Permission denied")
+                backup_file(event.src_path, path)
                 lock_file(event.src_path)
                 return
 
@@ -101,18 +129,30 @@ class FileChangeHandler(FileSystemEventHandler):
             elif new_hash != old_hash:
                 print(format_event("CREATED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
                 log_event("CREATED", event.src_path, "ALERT", "Hash mismatch")
+                backup_file(event.src_path, path)
                 lock_file(event.src_path)
             else:
                 print(format_event("CREATED", event.src_path, "OK", "✅", "Hash matches baseline"))
                 log_event("CREATED", event.src_path, "OK", "Hash matches baseline")
 
     def on_deleted(self, event):
-        print(format_event("DELETED", event.src_path, "REMOVED", "🗑️", "File deleted"))
-        log_event("DELETED", event.src_path, "REMOVED", "File deleted")
+        if event.src_path in baseline_hashes:
+            print(format_event("DELETED", event.src_path, "ALERT", "🚨", "Baseline file deleted!"))
+            log_event("DELETED", event.src_path, "ALERT", "Baseline file deleted")
+            restore_file(event.src_path, path)
+        else:
+            print(format_event("DELETED", event.src_path, "REMOVED", "🗑️", "File deleted"))
+            log_event("DELETED", event.src_path, "REMOVED", "File deleted")
+
 
 
 if __name__ == "__main__":
     path = input("Enter directory to monitor: ")
+    BACKUP_DIR = os.path.join(path, ".vault")
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    if not os.path.exists(path):
+        print(f"❌ Directory {path} does not exist.")
+        sys.exit(1) 
     event_handler = FileChangeHandler()
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
