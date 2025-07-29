@@ -16,3 +16,23 @@ def scan_file_with_yara(file_path, yara_rules):
     except Exception as e:
         print(f"🛑 YARA scan error for {file_path}: {e}")
         return []
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: python3 yara_scanner.py <file_to_scan>")
+        exit(1)
+
+    file_to_scan = sys.argv[1]
+    rules = compile_rules("yara_rules")
+
+    if rules:
+        matches = scan_file_with_yara(file_to_scan, rules)
+        if matches:
+            print(f"⚠️ YARA Match Found in {file_to_scan}!")
+            for match in matches:
+                print(f"Matched Rule: {match.rule}")
+        else:
+            print(f"✅ No YARA match in {file_to_scan}")
+    else:
+        print("❌ No YARA rules loaded.")
