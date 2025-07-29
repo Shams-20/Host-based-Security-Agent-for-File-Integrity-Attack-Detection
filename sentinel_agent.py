@@ -19,6 +19,7 @@ from event_logger import log_event
 COOLDOWN_SECONDS = 2
 event_cooldown = {}
 baseline_file = "hashes.json"
+locked_files = set()  # 🔒 Tracks already locked files so we ignore them after
 
 # Load baseline hashes
 try:
@@ -45,7 +46,6 @@ def calculate_hash(filepath):
         print(f"❌ Permission denied while hashing: {filepath}")
         return None
     return hasher.hexdigest()
-
 
 def lock_file(file_path):
     if platform.system() == "Windows":
@@ -77,6 +77,8 @@ def lock_file_linux(file_path):
 def process_file_event(file_path, event_type, yara_rules, baseline_hashes):
     if not os.path.isfile(file_path):
         return
+    if file_path in locked_files:
+        return
 
     try:
         new_hash = calculate_hash(file_path)
@@ -89,7 +91,10 @@ def process_file_event(file_path, event_type, yara_rules, baseline_hashes):
                 print(f"⚠️ YARA Match in {file_path} → Rule(s): {[m.rule for m in matches]}")
                 log_event("YARA", file_path, "ALERT", f"Matched rules: {[m.rule for m in matches]}")
                 lock_file(file_path)
-
+                locked_files.add(file_path)
+                print(f"🔍 Currently locked files: {locked_files}")  # Tells us what files are locked
+                return  # Skip further processing if locked
+                
         old_hash = baseline_hashes.get(file_path)
 
         if old_hash is None:
@@ -98,7 +103,7 @@ def process_file_event(file_path, event_type, yara_rules, baseline_hashes):
         elif new_hash != old_hash:
             print(format_event(event_type, file_path, "ALERT", "⚠️", "Hash mismatch"))
             log_event(event_type, file_path, "ALERT", "Hash mismatch")
-            lock_file(file_path)
+            # No locking unless YARA matches!
         else:
             print(format_event(event_type, file_path, "OK", "✅", "Hash unchanged"))
             log_event(event_type, file_path, "OK", "Hash unchanged")

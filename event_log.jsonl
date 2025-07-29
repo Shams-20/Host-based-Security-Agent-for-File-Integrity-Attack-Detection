@@ -16,3 +16,21 @@
 {"timestamp": "2025-07-29T15:09:14.109336", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/1", "status": "OK", "message": "Hash unchanged"}
 {"timestamp": "2025-07-29T15:09:14.197863", "event_type": "YARA", "file_path": "/home/kali/Desktop/test/4", "status": "ALERT", "message": "Matched rules: ['Detect_Evil_Strings']"}
 {"timestamp": "2025-07-29T15:09:14.200546", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/4", "status": "NEW", "message": "Not in baseline"}
+{"timestamp": "2025-07-29T15:29:00.013029", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Hash mismatch"}
+{"timestamp": "2025-07-29T15:29:00.515415", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Hash mismatch"}
+{"timestamp": "2025-07-29T15:29:08.949429", "event_type": "YARA", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Matched rules: ['Detect_Evil_Strings']"}
+{"timestamp": "2025-07-29T15:29:08.952341", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Hash mismatch"}
+{"timestamp": "2025-07-29T15:37:40.362364", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/4", "status": "NEW", "message": "Not in baseline"}
+{"timestamp": "2025-07-29T15:37:40.864855", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/4", "status": "NEW", "message": "Not in baseline"}
+{"timestamp": "2025-07-29T15:37:50.506275", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/4", "status": "NEW", "message": "Not in baseline"}
+{"timestamp": "2025-07-29T15:37:51.009123", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/4", "status": "NEW", "message": "Not in baseline"}
+{"timestamp": "2025-07-29T15:38:01.637196", "event_type": "YARA", "file_path": "/home/kali/Desktop/test/4", "status": "ALERT", "message": "Matched rules: ['Detect_Evil_Strings']"}
+{"timestamp": "2025-07-29T15:38:19.685578", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Hash mismatch"}
+{"timestamp": "2025-07-29T15:38:20.188270", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Hash mismatch"}
+{"timestamp": "2025-07-29T15:38:28.496112", "event_type": "YARA", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Matched rules: ['Detect_Evil_Strings']"}
+{"timestamp": "2025-07-29T15:42:40.208508", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/4", "status": "NEW", "message": "Not in baseline"}
+{"timestamp": "2025-07-29T15:42:40.710512", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/4", "status": "NEW", "message": "Not in baseline"}
+{"timestamp": "2025-07-29T15:42:43.855153", "event_type": "YARA", "file_path": "/home/kali/Desktop/test/4", "status": "ALERT", "message": "Matched rules: ['Detect_Evil_Strings']"}
+{"timestamp": "2025-07-29T15:42:59.571443", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Hash mismatch"}
+{"timestamp": "2025-07-29T15:43:00.074106", "event_type": "MODIFIED", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Hash mismatch"}
+{"timestamp": "2025-07-29T15:43:04.071774", "event_type": "YARA", "file_path": "/home/kali/Desktop/test/3", "status": "ALERT", "message": "Matched rules: ['Detect_Evil_Strings']"}
