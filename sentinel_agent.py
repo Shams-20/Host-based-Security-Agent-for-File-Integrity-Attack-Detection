@@ -6,6 +6,9 @@ import sys
 import subprocess
 import platform
 
+from event_logger import log_event
+
+
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -71,11 +74,14 @@ class FileChangeHandler(FileSystemEventHandler):
 
             if old_hash is None:
                 print(format_event("MODIFIED", event.src_path, "NEW", "🆕", "Not in baseline"))
+                log_event("MODIFIED", event.src_path, "NEW", "Not in baseline")
             elif new_hash != old_hash:
                 print(format_event("MODIFIED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
+                log_event("MODIFIED", event.src_path, "ALERT", "Hash mismatch")
                 lock_file(event.src_path)
             else:
                 print(format_event("MODIFIED", event.src_path, "OK", "✅", "Hash unchanged"))
+                log_event("MODIFIED", event.src_path, "OK", "Hash unchanged")
 
     def on_created(self, event):
         if os.path.isfile(event.src_path):
@@ -84,14 +90,18 @@ class FileChangeHandler(FileSystemEventHandler):
 
             if old_hash is None:
                 print(format_event("CREATED", event.src_path, "NEW", "🆕", "Not in baseline"))
+                log_event("CREATED", event.src_path, "NEW", "Not in baseline")
             elif new_hash != old_hash:
                 print(format_event("CREATED", event.src_path, "ALERT", "⚠️", "Hash mismatch"))
+                log_event("CREATED", event.src_path, "ALERT", "Hash mismatch")
                 lock_file(event.src_path)
             else:
                 print(format_event("CREATED", event.src_path, "OK", "✅", "Hash matches baseline"))
+                log_event("CREATED", event.src_path, "OK", "Hash matches baseline")
 
     def on_deleted(self, event):
         print(format_event("DELETED", event.src_path, "REMOVED", "🗑️", "File deleted"))
+        log_event("DELETED", event.src_path, "REMOVED", "File deleted")
 
 if __name__ == "__main__":
     path = input("Enter directory to monitor: ")
